@@ -1,0 +1,30 @@
+# 数据库（敏感数据）
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# 上传的图片
+uploads/*
+!uploads/.gitkeep
+
+# 日志
+*.log
+server*.log
+server*.err
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# 环境变量文件
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
