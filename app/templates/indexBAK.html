@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>🏥 健康追踪</title>
+<meta name="version" content="2.0">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+/* ── 基础重置 ── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#4f8ef7;--primary-dark:#3a6fd8;--success:#22c55e;--warning:#f59e0b;
+  --danger:#ef4444;--bg:#f1f5f9;--card:#fff;--text:#1e293b;--muted:#64748b;
+  --border:#e2e8f0;--radius:14px;--shadow:0 2px 12px rgba(0,0,0,.08);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:80px}
+/* ── 顶部导航 ── */
+.topbar{background:var(--primary);color:#fff;padding:16px 20px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(79,142,247,.4)}
+.topbar h1{font-size:20px;font-weight:700;letter-spacing:.5px}
+.topbar .date-info{font-size:13px;opacity:.9}
+/* ── 底部 Tab ── */
+.tab-bar{position:fixed;bottom:0;left:0;right:0;background:#fff;
+  border-top:1px solid var(--border);display:flex;z-index:100;
+  box-shadow:0 -2px 12px rgba(0,0,0,.06)}
+.tab-item{flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;padding:8px 4px;cursor:pointer;
+  color:var(--muted);transition:color .2s;user-select:none;min-height:56px}
+.tab-item.active{color:var(--primary)}
+.tab-item .icon{font-size:22px;line-height:1}
+.tab-item .label{font-size:11px;margin-top:3px;font-weight:500}
+/* ── 页面容器 ── */
+.page{display:none;padding:16px;max-width:800px;margin:0 auto;animation:fadeIn .2s}
+.page.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+/* ── 卡片 ── */
+.card{background:var(--card);border-radius:var(--radius);padding:18px;
+  margin-bottom:16px;box-shadow:var(--shadow);border:1px solid var(--border)}
+.card-title{font-size:16px;font-weight:700;margin-bottom:14px;
+  display:flex;align-items:center;gap:8px}
+.card-title .ico{font-size:20px}
+/* ── 按钮 ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:10px 18px;border-radius:10px;font-size:14px;font-weight:600;
+  cursor:pointer;border:none;transition:all .15s;white-space:nowrap}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-dark)}
+.btn-success{background:var(--success);color:#fff}
+.btn-warning{background:var(--warning);color:#fff}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-ghost{background:transparent;color:var(--primary);border:1.5px solid var(--primary)}
+.btn-sm{padding:6px 12px;font-size:13px;border-radius:8px}
+.btn-block{width:100%;display:flex}
+/* ── 表单 ── */
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px}
+input,select,textarea{width:100%;padding:10px 14px;border:1.5px solid var(--border);
+  border-radius:10px;font-size:15px;color:var(--text);background:#fff;
+  transition:border-color .2s;outline:none;font-family:inherit}
+input:focus,select:focus,textarea:focus{border-color:var(--primary)}
+textarea{resize:vertical;min-height:70px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+/* ── 药品列表 ── */
+.med-card{background:var(--card);border-radius:var(--radius);padding:16px;
+  margin-bottom:12px;box-shadow:var(--shadow);border:1px solid var(--border);
+  display:flex;gap:14px;align-items:flex-start}
+.med-photo{width:64px;height:64px;border-radius:10px;object-fit:cover;
+  border:2px solid var(--border);flex-shrink:0;cursor:pointer;background:#f8fafc}
+.med-photo-placeholder{width:64px;height:64px;border-radius:10px;
+  border:2px dashed var(--border);display:flex;align-items:center;
+  justify-content:center;font-size:28px;flex-shrink:0;cursor:pointer;background:#f8fafc}
+.med-info{flex:1;min-width:0}
+.med-name{font-size:17px;font-weight:700;margin-bottom:4px}
+.med-stock{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.stock-badge{padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.stock-ok{background:#dcfce7;color:#166534}
+.stock-warn{background:#fef3c7;color:#92400e}
+.stock-danger{background:#fee2e2;color:#991b1b}
+@keyframes blink{50%{opacity:.3}}
+.stock-blink{animation:blink 1s infinite}
+.med-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+/* ── 剂量选择器 ── */
+.dose-picker{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.dose-btn{padding:8px 14px;border-radius:8px;border:1.5px solid var(--border);
+  background:#f8fafc;font-size:14px;cursor:pointer;font-weight:600;transition:all .15s}
+.dose-btn.selected,.dose-btn:hover{background:var(--primary);color:#fff;border-color:var(--primary)}
+/* ── 时段卡片 ── */
+.period-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.period-card{background:#f8fafc;border-radius:12px;padding:14px;text-align:center;
+  border:2px solid transparent;cursor:pointer;transition:all .2s}
+.period-card.taken{border-color:var(--success);background:#f0fdf4}
+.period-card.taken .period-icon{filter:none}
+.period-card .period-icon{font-size:28px;margin-bottom:6px}
+.period-card .period-label{font-size:13px;font-weight:600;color:var(--text)}
+.period-card .period-dose{font-size:12px;color:var(--muted);margin-top:2px}
+/* ── 日历 ── */
+.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-header{text-align:center;font-size:12px;font-weight:700;color:var(--muted);padding:6px 0}
+.cal-day{aspect-ratio:1;border-radius:8px;display:flex;align-items:center;
+  justify-content:center;font-size:13px;font-weight:600;cursor:pointer;
+  transition:transform .1s;position:relative}
+.cal-day:hover{transform:scale(1.12)}
+.cal-day.today{box-shadow:0 0 0 2.5px var(--primary)}
+.cal-day.full{background:#bbf7d0;color:#166534}
+.cal-day.partial{background:#fde68a;color:#92400e}
+.cal-day.missed{background:#fecaca;color:#991b1b}
+.cal-day.future{background:#f1f5f9;color:#cbd5e1;cursor:default}
+.cal-day.empty{background:transparent;cursor:default}
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.cal-nav-btn{background:none;border:none;font-size:20px;cursor:pointer;color:var(--primary);
+  padding:4px 10px;border-radius:8px;transition:background .15s}
+.cal-nav-btn:hover{background:var(--border)}
+/* ── 血压图表 ── */
+.bp-chart-wrap{position:relative;height:220px;width:100%;margin-top:10px}
+.bp-record-item{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 0;border-bottom:1px solid var(--border)}
+.bp-value{font-size:22px;font-weight:800}
+.bp-value.high{color:var(--danger)}
+.bp-value.normal{color:var(--success)}
+.bp-value.low{color:var(--warning)}
+.bp-meta{font-size:12px;color:var(--muted);margin-top:3px}
+/* ── 大便 ── */
+.bowel-stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.stat-box{background:#f8fafc;border-radius:12px;padding:14px;text-align:center;border:1px solid var(--border)}
+.stat-num{font-size:26px;font-weight:800;color:var(--primary)}
+.stat-label{font-size:12px;color:var(--muted);margin-top:4px}
+.bowel-item{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 0;border-bottom:1px solid var(--border)}
+/* ── 备份 ── */
+.backup-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.backup-card{background:#f8fafc;border-radius:12px;padding:18px;border:1px solid var(--border);
+  text-align:center}
+.backup-card .backup-icon{font-size:40px;margin-bottom:10px}
+.backup-card h3{font-size:15px;font-weight:700;margin-bottom:8px}
+.backup-card p{font-size:13px;color:var(--muted);margin-bottom:14px}
+/* ── 模态框 ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;
+  display:flex;align-items:flex-end;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity .25s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:600px;
+  padding:24px;max-height:90vh;overflow-y:auto;
+  transform:translateY(100%);transition:transform .3s ease}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-title{font-size:18px;font-weight:800;margin-bottom:20px;
+  display:flex;align-items:center;justify-content:space-between}
+.modal-close{background:none;border:none;font-size:22px;cursor:pointer;
+  color:var(--muted);padding:0 4px}
+/* ── 提示吐司 ── */
+#toast{position:fixed;top:80px;left:50%;transform:translateX(-50%);
+  background:#1e293b;color:#fff;padding:12px 24px;border-radius:12px;
+  font-size:14px;font-weight:600;z-index:999;opacity:0;pointer-events:none;
+  transition:opacity .25s;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.25)}
+#toast.show{opacity:1}
+/* ── 空状态 ── */
+.empty-state{text-align:center;padding:40px 20px;color:var(--muted)}
+.empty-state .empty-icon{font-size:52px;margin-bottom:12px}
+.empty-state p{font-size:15px}
+/* ── 分割线 ── */
+.divider{height:1px;background:var(--border);margin:14px 0}
+/* ── 标签 ── */
+.tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:600}
+.tag-blue{background:#dbeafe;color:#1d4ed8}
+.tag-green{background:#dcfce7;color:#166534}
+.tag-orange{background:#fef3c7;color:#92400e}
+/* ── 响应式 ── */
+@media(min-width:600px){
+  body{padding-bottom:0}
+  .tab-bar{display:none}
+  .topbar{padding:16px 32px}
+  .topbar .desktop-nav{display:flex;gap:4px}
+  .page{padding:24px 32px}
+  .period-grid{grid-template-columns:repeat(3,1fr)}
+  .form-row{grid-template-columns:repeat(3,1fr)}
+}
+@media(max-width:599px){.topbar .desktop-nav{display:none}}
+.desktop-nav .nav-btn{padding:8px 16px;border-radius:10px;background:rgba(255,255,255,.15);
+  border:none;color:#fff;font-size:14px;font-weight:600;cursor:pointer;transition:background .2s}
+.desktop-nav .nav-btn:hover,.desktop-nav .nav-btn.active{background:rgba(255,255,255,.3)}
+/* ── 图片预览 ── */
+.img-preview-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);
+  z-index:600;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.img-preview-overlay img{max-width:90vw;max-height:90vh;border-radius:12px}
+/* ── 进度条 ── */
+.progress-bar{height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-top:6px}
+.progress-fill{height:100%;border-radius:4px;transition:width .4s}
+.progress-ok{background:var(--success)}
+.progress-warn{background:var(--warning)}
+.progress-danger{background:var(--danger)}
+/* ── 快速记录按钮 ── */
+.quick-log-btn{background:linear-gradient(135deg,var(--primary),var(--primary-dark));
+  color:#fff;border:none;border-radius:16px;padding:18px;width:100%;
+  font-size:18px;font-weight:800;cursor:pointer;box-shadow:0 4px 16px rgba(79,142,247,.4);
+  transition:transform .15s,box-shadow .15s;letter-spacing:.5px}
+.quick-log-btn:active{transform:scale(.97)}
+/* 遮罩点击 */
+.close-on-click{cursor:pointer}
+</style>
+</head>
+<body>
+
+<!-- 顶栏 -->
+<div class="topbar">
+  <div>
+    <h1>🏥 健康追踪</h1>
+    <div class="date-info" id="topDate"></div>
+  </div>
+  <nav class="desktop-nav">
+    <button class="nav-btn active" onclick="switchPage('meds')">💊 服药</button>
+    <button class="nav-btn" onclick="switchPage('stock')">📦 库存</button>
+    <button class="nav-btn" onclick="switchPage('calendar')">📅 日历</button>
+    <button class="nav-btn" onclick="switchPage('bp')">❤️ 血压</button>
+    <button class="nav-btn" onclick="switchPage('bowel')">🚽 大便</button>
+    <button class="nav-btn" onclick="switchPage('backup')">💾 备份</button>
+  </nav>
+</div>
+
+<!-- 页面内容 -->
+
+<!-- ═══ 服药记录页 ═══ -->
+<div class="page active" id="page-meds">
+  <div class="card">
+    <div class="card-title"><span class="ico">💊</span>今日服药</div>
+    <div id="todayDateLabel" style="font-size:14px;color:var(--muted);margin-bottom:14px"></div>
+    <div id="medPeriodList">
+      <div class="empty-state"><div class="empty-icon">💊</div><p>暂无药品，请先在库存页添加</p></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title"><span class="ico">📋</span>今日记录</div>
+    <div id="todayLogList"></div>
+  </div>
+</div>
+
+<!-- ═══ 库存管理页 ═══ -->
+<div class="page" id="page-stock">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h2 style="font-size:18px;font-weight:800">📦 药品库存</h2>
+    <button class="btn btn-primary btn-sm" onclick="openAddMedModal()">＋ 添加药品</button>
+  </div>
+  <div id="stockList"></div>
+</div>
+
+<!-- ═══ 日历页 ═══ -->
+<div class="page" id="page-calendar">
+  <div class="card">
+    <div class="cal-nav">
+      <button class="cal-nav-btn" onclick="calPrev()">‹</button>
+      <span id="calTitle" style="font-size:17px;font-weight:800"></span>
+      <button class="cal-nav-btn" onclick="calNext()">›</button>
+    </div>
+    <!-- 图例 -->
+    <div style="display:flex;gap:14px;margin-bottom:14px;font-size:12px;flex-wrap:wrap">
+      <span><span style="display:inline-block;width:14px;height:14px;background:#bbf7d0;border-radius:4px;vertical-align:middle;margin-right:4px"></span>全服</span>
+      <span><span style="display:inline-block;width:14px;height:14px;background:#fde68a;border-radius:4px;vertical-align:middle;margin-right:4px"></span>部分</span>
+      <span><span style="display:inline-block;width:14px;height:14px;background:#fecaca;border-radius:4px;vertical-align:middle;margin-right:4px"></span>漏服</span>
+    </div>
+    <div class="calendar-grid" id="calGrid"></div>
+  </div>
+  <!-- 当日详情 -->
+  <div class="card" id="calDayDetail" style="display:none">
+    <div class="card-title"><span class="ico">📋</span><span id="calDetailTitle"></span></div>
+    <div id="calDetailContent"></div>
+  </div>
+</div>
+
+<!-- ═══ 血压心率页 ═══ -->
+<div class="page" id="page-bp">
+  <div class="card">
+    <div class="card-title"><span class="ico">❤️</span>记录血压心率</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>收缩压（高压）mmHg</label>
+        <input type="number" id="bpSystolic" placeholder="120" min="60" max="250">
+      </div>
+      <div class="form-group">
+        <label>舒张压（低压）mmHg</label>
+        <input type="number" id="bpDiastolic" placeholder="80" min="40" max="150">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>心率（次/分）</label>
+        <input type="number" id="bpPulse" placeholder="75" min="30" max="220">
+      </div>
+      <div class="form-group">
+        <label>测量时间</label>
+        <input type="datetime-local" id="bpTime">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>备注</label>
+      <input type="text" id="bpNote" placeholder="例：饭后、服药后...">
+    </div>
+    <button class="btn btn-primary btn-block" onclick="saveBP()">📝 保存记录</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="ico">📈</span>近30天趋势</div>
+    <div class="bp-chart-wrap"><canvas id="bpChart"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="ico">📋</span>历史记录</div>
+    <div id="bpList"></div>
+  </div>
+</div>
+
+<!-- ═══ 大便记录页 ═══ -->
+<div class="page" id="page-bowel">
+  <div class="card" style="text-align:center">
+    <div style="font-size:60px;margin-bottom:12px">🚽</div>
+    <button class="quick-log-btn" onclick="logBowel()">一键记录大便</button>
+    <p style="margin-top:12px;font-size:13px;color:var(--muted)">点击立即记录当前时间</p>
+  </div>
+
+  <div class="bowel-stat-grid" id="bowelStats">
+    <div class="stat-box"><div class="stat-num">--</div><div class="stat-label">距上次(小时)</div></div>
+    <div class="stat-box"><div class="stat-num">--</div><div class="stat-label">平均间隔(小时)</div></div>
+    <div class="stat-box"><div class="stat-num">--</div><div class="stat-label">近期次数</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="ico">📋</span>历史记录</div>
+    <div id="bowelList"></div>
+  </div>
+</div>
+
+<!-- ═══ 备份页 ═══ -->
+<div class="page" id="page-backup">
+  <div class="card">
+    <div class="card-title"><span class="ico">💾</span>数据备份与恢复</div>
+    <div class="backup-grid">
+      <div class="backup-card">
+        <div class="backup-icon">📦</div>
+        <h3>JSON 完整备份</h3>
+        <p>导出全部数据，支持完整恢复</p>
+        <button class="btn btn-primary btn-block" onclick="downloadJSON()">⬇ 下载 JSON</button>
+      </div>
+      <div class="backup-card">
+        <div class="backup-icon">📊</div>
+        <h3>CSV 导出</h3>
+        <p>选择数据表导出为 CSV</p>
+        <select id="csvTable" style="margin-bottom:10px">
+          <option value="bp_records">血压记录</option>
+          <option value="med_logs">服药记录</option>
+          <option value="bowel_records">大便记录</option>
+          <option value="medicines">药品信息</option>
+        </select>
+        <button class="btn btn-success btn-block" onclick="downloadCSV()">⬇ 下载 CSV</button>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="backup-card" style="text-align:left;background:#fff7ed;border-color:#fed7aa">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="font-size:28px">🔄</span>
+        <div>
+          <h3 style="font-size:15px">从 JSON 恢复数据</h3>
+          <p style="font-size:13px;color:var(--muted)">⚠️ 将覆盖现有所有数据，请谨慎操作</p>
+        </div>
+      </div>
+      <input type="file" id="restoreFile" accept=".json" style="margin-bottom:10px">
+      <button class="btn btn-warning btn-block" onclick="restoreData()">⬆ 恢复数据</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 底部 Tab ─── -->
+<nav class="tab-bar">
+  <div class="tab-item active" onclick="switchPage('meds')">
+    <span class="icon">💊</span><span class="label">服药</span>
+  </div>
+  <div class="tab-item" onclick="switchPage('stock')">
+    <span class="icon">📦</span><span class="label">库存</span>
+  </div>
+  <div class="tab-item" onclick="switchPage('calendar')">
+    <span class="icon">📅</span><span class="label">日历</span>
+  </div>
+  <div class="tab-item" onclick="switchPage('bp')">
+    <span class="icon">❤️</span><span class="label">血压</span>
+  </div>
+  <div class="tab-item" onclick="switchPage('bowel')">
+    <span class="icon">🚽</span><span class="label">大便</span>
+  </div>
+  <div class="tab-item" onclick="switchPage('backup')">
+    <span class="icon">💾</span><span class="label">备份</span>
+  </div>
+</nav>
+
+<!-- ─── 添加/编辑药品 Modal ─── -->
+<div class="modal-overlay" id="medModal">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="medModalTitle">添加药品</span>
+      <button class="modal-close" onclick="closeMedModal()">✕</button>
+    </div>
+    <input type="hidden" id="editMedId">
+    <div class="form-group">
+      <label>药品名称 *</label>
+      <input type="text" id="medName" placeholder="例：降压药、阿司匹林">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>单位</label>
+        <select id="medUnit">
+          <option value="片">片</option>
+          <option value="粒">粒</option>
+          <option value="颗">颗</option>
+          <option value="支">支</option>
+          <option value="袋">袋</option>
+          <option value="mg">mg</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>当前库存</label>
+        <input type="number" id="medStock" placeholder="0" min="0" step="0.5">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>每日用量（自动计算剩余天数）</label>
+        <input type="number" id="medDailyDose" placeholder="1" min="0.25" step="0.25">
+      </div>
+      <div class="form-group">
+        <label>库存预警（天）</label>
+        <input type="number" id="medLowStock" placeholder="3" min="0">
+      </div>
+    </div>
+
+    <!-- 服药时段配置 -->
+    <div class="form-group">
+      <label>服药时段设置（可多选）</label>
+      <div id="scheduleEditor" style="display:grid;gap:10px;margin-top:8px"></div>
+    </div>
+
+    <div class="form-group">
+      <label>备注</label>
+      <textarea id="medNotes" placeholder="用途、注意事项..."></textarea>
+    </div>
+
+    <!-- 照片上传 -->
+    <div class="form-group">
+      <label>药品照片</label>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:6px">
+        <div id="medPhotoPreview" class="med-photo-placeholder">📷</div>
+        <div>
+          <input type="file" id="medPhotoFile" accept="image/*" style="display:none" onchange="previewMedPhoto(this)">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('medPhotoFile').click()">选择图片</button>
+          <p style="font-size:12px;color:var(--muted);margin-top:6px">支持 JPG/PNG/WebP，最大 16MB</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeMedModal()">取消</button>
+      <button class="btn btn-primary" style="flex:2" onclick="saveMedicine()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 服药打卡 Modal ─── -->
+<div class="modal-overlay" id="takeModal">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="takeModalTitle">记录服药</span>
+      <button class="modal-close" onclick="closeTakeModal()">✕</button>
+    </div>
+    <input type="hidden" id="takeMedId">
+    <input type="hidden" id="takePeriod">
+    <input type="hidden" id="takeScheduleId">
+    <div class="form-group">
+      <label>剂量</label>
+      <div class="dose-picker" id="dosePicker">
+        <div class="dose-btn" data-dose="0.25" onclick="selectDose(this)">1/4</div>
+        <div class="dose-btn" data-dose="0.333" onclick="selectDose(this)">1/3</div>
+        <div class="dose-btn" data-dose="0.5" onclick="selectDose(this)">1/2</div>
+        <div class="dose-btn selected" data-dose="1" onclick="selectDose(this)">1片</div>
+        <div class="dose-btn" data-dose="1.5" onclick="selectDose(this)">1.5片</div>
+        <div class="dose-btn" data-dose="2" onclick="selectDose(this)">2片</div>
+      </div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:14px;color:var(--muted)">自定义：</span>
+        <input type="number" id="customDose" placeholder="0.25" min="0.25" step="0.25" style="width:100px">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>服药时间</label>
+      <input type="datetime-local" id="takeTime">
+    </div>
+    <div class="form-group">
+      <label>备注</label>
+      <input type="text" id="takeNote" placeholder="可选">
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeTakeModal()">取消</button>
+      <button class="btn btn-success" style="flex:2" onclick="confirmTake()">✅ 确认服药</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 库存补充 Modal ─── -->
+<div class="modal-overlay" id="stockModal">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="stockModalTitle">补充库存</span>
+      <button class="modal-close" onclick="closeStockModal()">✕</button>
+    </div>
+    <input type="hidden" id="stockMedId">
+    <div class="form-group">
+      <label>补充数量（片/粒）</label>
+      <input type="number" id="stockAmount" placeholder="30" min="1" step="1">
+    </div>
+    <div style="margin-bottom:14px;font-size:14px;color:var(--muted)" id="stockCurrentInfo"></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeStockModal()">取消</button>
+      <button class="btn btn-primary" style="flex:2" onclick="confirmStock()">确认补充</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 图片预览 ─── -->
+<div id="imgPreviewOverlay" class="img-preview-overlay" style="display:none" onclick="this.style.display='none'">
+  <img id="imgPreviewSrc" src="" alt="">
+</div>
+
+<!-- 吐司提示 -->
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// 全局状态
+// ═══════════════════════════════════════════════════════════════════════
+const API = '';  // 同域部署，空前缀
+let medicines = [];
+let currentPage = 'meds';
+let calYear, calMonth;
+let bpChartInstance = null;
+
+// ═══════════════════════════════════════════════════════════════════════
+// 工具函数
+// ═══════════════════════════════════════════════════════════════════════
+function toast(msg, duration=2500){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), duration);
+}
+
+function fmt(dt){
+  if(!dt) return '--';
+  return dt.replace('T',' ').substring(0,16);
+}
+
+function todayStr(){ return new Date().toISOString().substring(0,10); }
+
+function localDatetimeStr(){
+  const n = new Date();
+  const pad = x=>String(x).padStart(2,'0');
+  return `${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())}T${pad(n.getHours())}:${pad(n.getMinutes())}`;
+}
+
+async function api(method, path, body=null, isForm=false){
+  const opts = {method, headers:{}};
+  if(body && !isForm){ opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
+  if(body && isForm){ opts.body=body; }
+  const res = await fetch(API+path, opts);
+  if(!res.ok){ const e=await res.json().catch(()=>({error:'请求失败'})); throw new Error(e.error||'请求失败'); }
+  return res.json();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 页面切换
+// ═══════════════════════════════════════════════════════════════════════
+function switchPage(name){
+  currentPage = name;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.querySelectorAll('.tab-item').forEach((t,i)=>{
+    const tabs=['meds','stock','calendar','bp','bowel','backup'];
+    t.classList.toggle('active', tabs[i]===name);
+  });
+  document.querySelectorAll('.nav-btn').forEach(b=>{
+    const map={meds:'服药',stock:'库存',calendar:'日历',bp:'血压',bowel:'大便',backup:'备份'};
+    b.classList.toggle('active', b.textContent.includes(Object.values(map).find((v,i)=>Object.keys(map)[i]===name)||''));
+  });
+  if(name==='meds') loadTodayMeds();
+  if(name==='stock') loadStock();
+  if(name==='calendar') loadCalendar();
+  if(name==='bp') loadBP();
+  if(name==='bowel') loadBowel();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 初始化
+// ═══════════════════════════════════════════════════════════════════════
+async function init(){
+  // 更新顶部日期
+  const now = new Date();
+  const weekNames=['日','一','二','三','四','五','六'];
+  document.getElementById('topDate').textContent =
+    `${now.getMonth()+1}月${now.getDate()}日 周${weekNames[now.getDay()]}`;
+  document.getElementById('todayDateLabel').textContent =
+    `今天 ${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
+  // 初始化日历月份
+  calYear = now.getFullYear();
+  calMonth = now.getMonth()+1;
+
+  await loadMedicines();
+  loadTodayMeds();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 药品数据加载
+// ═══════════════════════════════════════════════════════════════════════
+async function loadMedicines(){
+  try{ medicines = await api('GET','/api/medicines'); }
+  catch(e){ console.error(e); medicines=[]; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 今日服药 - 打卡界面
+// ═══════════════════════════════════════════════════════════════════════
+async function loadTodayMeds(){
+  await loadMedicines();
+  const date = todayStr();
+  let logs = [];
+  try{ logs = await api('GET',`/api/med-logs?date=${date}`); } catch{}
+
+  // 按 medicine_id+period 汇总已服
+  const takenMap = {};
+  logs.forEach(l=>{ takenMap[`${l.medicine_id}_${l.period}`]=(takenMap[`${l.medicine_id}_${l.period}`]||0)+l.dose; });
+
+  const container = document.getElementById('medPeriodList');
+  if(!medicines.length){
+    container.innerHTML=`<div class="empty-state"><div class="empty-icon">💊</div><p>暂无药品，请先在库存页添加</p></div>`;
+    document.getElementById('todayLogList').innerHTML='';
+    return;
+  }
+
+  // ── 按时段收集所有药品条目 ──
+  const PERIOD_ORDER = ['morning','noon','evening','custom'];
+  const PERIOD_META  = {
+    morning: {label:'早餐后', icon:'🌅', color:'#fff7ed', border:'#fed7aa'},
+    noon:    {label:'午餐后', icon:'☀️',  color:'#fefce8', border:'#fde047'},
+    evening: {label:'晚餐后', icon:'🌙', color:'#eff6ff', border:'#93c5fd'},
+    custom:  {label:'其他',   icon:'⏰', color:'#f8fafc', border:'#cbd5e1'},
+  };
+
+  // periodMap: { 'morning': [{med, schedule}, ...], ... }
+  const periodMap = {};
+  medicines.forEach(med=>{
+    (med.schedules||[]).forEach(s=>{
+      const p = s.period||'custom';
+      if(!periodMap[p]) periodMap[p]=[];
+      periodMap[p].push({med, schedule:s});
+    });
+  });
+
+  const hasAny = Object.keys(periodMap).length > 0;
+  if(!hasAny){
+    container.innerHTML=`<div class="empty-state"><div class="empty-icon">💊</div><p>暂无时段配置的药品</p></div>`;
+  } else {
+    let html = '';
+    PERIOD_ORDER.forEach(period=>{
+      const items = periodMap[period];
+      if(!items||!items.length) return;
+      const meta = PERIOD_META[period]||PERIOD_META.custom;
+      // 判断本时段是否全部已服
+      const allTaken = items.every(({med,schedule})=>!!takenMap[`${med.id}_${schedule.period}`]);
+      const anyTaken = items.some(({med,schedule})=>!!takenMap[`${med.id}_${schedule.period}`]);
+
+      html += `
+      <div style="margin-bottom:20px">
+        <!-- 时段标题 -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div style="width:40px;height:40px;border-radius:12px;background:${meta.color};border:2px solid ${meta.border};
+                      display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${meta.icon}</div>
+          <div>
+            <div style="font-size:16px;font-weight:800">${meta.label}</div>
+            <div style="font-size:12px;color:var(--muted)">${items.length}种药 · ${allTaken?'<span style="color:var(--success);font-weight:700">✅ 已全部服用</span>':anyTaken?'<span style="color:var(--warning);font-weight:700">⚠️ 部分已服</span>':'<span style="color:var(--muted)">待服药</span>'}</div>
+          </div>
+        </div>
+        <!-- 该时段的药品列表 -->
+        <div style="display:flex;flex-direction:column;gap:10px">`;
+
+      items.forEach(({med, schedule:s})=>{
+        const key   = `${med.id}_${s.period}`;
+        const taken = !!takenMap[key];
+        const doseLabel = `${s.dose}${med.unit}`;
+        html += `
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;
+                      border-radius:12px;border:2px solid ${taken?'var(--success)':'var(--border)'};
+                      background:${taken?'#f0fdf4':'#fff'};cursor:pointer;transition:all .15s"
+               onclick="openTakeModal(${med.id},'${s.period}','${s.label||meta.label}',${s.dose},${s.id})">
+            <!-- 药品图标 -->
+            ${med.photo
+              ? `<img src="/static/uploads/${med.photo}" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex-shrink:0">`
+              : `<div style="width:44px;height:44px;border-radius:10px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">💊</div>`}
+            <!-- 药品信息 -->
+            <div style="flex:1;min-width:0">
+              <div style="font-size:15px;font-weight:700;${taken?'color:var(--success)':''}">${med.name}</div>
+              <div style="font-size:13px;color:var(--muted);margin-top:2px">
+                剂量 <strong>${doseLabel}</strong> · 库存 ${med.stock}${med.unit}
+                ${(()=>{
+                  const days = med.daily_dose>0 ? Math.floor(med.stock/med.daily_dose) : null;
+                  if(days===null) return '';
+                  if(days<=0) return ` · <span style="color:var(--danger);font-weight:700;animation:blink 1s infinite">⚠️ 已耗尽</span>`;
+                  if(days<=3) return ` · <span style="color:var(--warning);font-weight:700">还剩 ${days} 天⚠️</span>`;
+                  return ` · <span style="color:var(--muted)">还剩 ${days} 天</span>`;
+                })()}
+              </div>
+            </div>
+            <!-- 状态标记 -->
+            <div style="flex-shrink:0;font-size:26px">${taken?'✅':'○'}</div>
+          </div>`;
+      });
+      html += `</div></div>`;
+    });
+    container.innerHTML = html;
+  }
+
+  // 今日记录列表
+  const logContainer = document.getElementById('todayLogList');
+  if(!logs.length){
+    logContainer.innerHTML=`<div style="color:var(--muted);font-size:14px;padding:10px 0">暂无记录</div>`;
+    return;
+  }
+  const periodLabels={morning:'早',noon:'午',evening:'晚',custom:'自定义','':'其他'};
+  logContainer.innerHTML = logs.map(l=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <span style="font-weight:700">${l.med_name}</span>
+        <span class="tag tag-green" style="margin-left:6px">${l.dose}${l.unit}</span>
+        <span class="tag tag-blue" style="margin-left:4px">${periodLabels[l.period]||l.period||'其他'}</span>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">${fmt(l.taken_at)}${l.note?' · '+l.note:''}</div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteMedLog(${l.id})">✕</button>
+    </div>`).join('');
+}
+
+// ─── 打卡 Modal ───
+function openTakeModal(medId, period, label, dose, scheduleId){
+  document.getElementById('takeMedId').value = medId;
+  document.getElementById('takePeriod').value = period;
+  document.getElementById('takeScheduleId').value = scheduleId||'';
+  document.getElementById('takeTime').value = localDatetimeStr();
+  document.getElementById('takeNote').value = '';
+  const med = medicines.find(m=>m.id==medId);
+  document.getElementById('takeModalTitle').textContent = `${med?med.name:''} · ${label}`;
+
+  // 预选剂量
+  document.querySelectorAll('.dose-btn').forEach(b=>{
+    b.classList.toggle('selected', Math.abs(parseFloat(b.dataset.dose)-dose)<0.01);
+  });
+  document.getElementById('customDose').value='';
+  document.getElementById('takeModal').classList.add('open');
+}
+function closeTakeModal(){ document.getElementById('takeModal').classList.remove('open'); }
+
+function selectDose(btn){
+  document.querySelectorAll('.dose-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('customDose').value='';
+}
+
+async function confirmTake(){
+  const medId = document.getElementById('takeMedId').value;
+  const period = document.getElementById('takePeriod').value;
+  const scheduleId = document.getElementById('takeScheduleId').value;
+  const takenAt = document.getElementById('takeTime').value.replace('T',' ')+':00';
+  const note = document.getElementById('takeNote').value;
+  let dose = parseFloat(document.getElementById('customDose').value);
+  if(!dose){
+    const sel = document.querySelector('.dose-btn.selected');
+    dose = sel ? parseFloat(sel.dataset.dose) : 1;
+  }
+  try{
+    await api('POST','/api/med-logs',{medicine_id:Number(medId),period,schedule_id:scheduleId?Number(scheduleId):null,taken_at:takenAt,dose,note});
+    closeTakeModal();
+    await loadTodayMeds();   // await：确保库存/天数刷新完再渲染
+    if(currentPage==='stock') loadStock();
+    toast('✅ 服药记录成功！');
+  } catch(e){ toast('❌ '+e.message); }
+}
+
+async function deleteMedLog(id){
+  if(!confirm('确认删除这条记录？（库存将恢复）')) return;
+  try{
+    await api('DELETE',`/api/med-logs/${id}`);
+    await loadTodayMeds();   // await：确保库存/天数恢复后再渲染
+    if(currentPage==='stock') loadStock();
+    toast('删除成功，库存已恢复');
+  } catch(e){ toast('❌ '+e.message); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 库存管理
+// ═══════════════════════════════════════════════════════════════════════
+async function loadStock(){
+  await loadMedicines();
+  const container = document.getElementById('stockList');
+  if(!medicines.length){
+    container.innerHTML=`<div class="card"><div class="empty-state"><div class="empty-icon">📦</div><p>暂无药品，点击右上角添加</p></div></div>`;
+    return;
+  }
+  container.innerHTML = medicines.map(m=>{
+    const daysLeft = m.days_left;
+    let badgeClass='stock-ok', badgeText=`剩余${daysLeft}天`;
+    if(daysLeft<=0){ badgeClass='stock-danger stock-blink'; badgeText='已耗尽！'; }
+    else if(daysLeft<=3){ badgeClass='stock-warn'; badgeText=`仅剩${daysLeft}天⚠️`; }
+
+    const maxDays = Math.max(30, daysLeft);
+    const pct = Math.min(100, (daysLeft/maxDays)*100);
+    let progClass = daysLeft<=0?'progress-danger': daysLeft<=3?'progress-warn':'progress-ok';
+
+    return `<div class="med-card">
+      ${m.photo?
+        `<img class="med-photo" src="/static/uploads/${m.photo}" onclick="previewImg('/static/uploads/${m.photo}')" alt="">`:
+        `<div class="med-photo-placeholder" onclick="uploadPhotoFor(${m.id})">📷</div>`}
+      <div class="med-info">
+        <div class="med-name">${m.name}</div>
+        <div class="med-stock">
+          <span class="stock-badge ${badgeClass}">${badgeText}</span>
+          <span style="font-size:13px;color:var(--muted)">库存 ${m.stock}${m.unit} / 日用 ${m.daily_dose}${m.unit}</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill ${progClass}" style="width:${pct}%"></div></div>
+        ${m.notes?`<div style="font-size:12px;color:var(--muted);margin-top:6px">${m.notes}</div>`:''}
+        ${m.schedules&&m.schedules.length?`<div style="font-size:12px;margin-top:6px">${m.schedules.map(s=>`<span class="tag tag-blue">${s.label}${s.dose}${m.unit}</span>`).join(' ')}</div>`:''}
+        <div class="med-actions">
+          <button class="btn btn-primary btn-sm" onclick="openStockModal(${m.id},'${m.name}',${m.stock},'${m.unit}')">＋ 补充</button>
+          <button class="btn btn-ghost btn-sm" onclick="openEditMedModal(${m.id})">✏️ 编辑</button>
+          <button class="btn btn-sm" style="background:#f1f5f9;color:var(--muted)" onclick="uploadPhotoFor(${m.id})">📷 照片</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteMed(${m.id})">删除</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// 添加药品 Modal
+const defaultSchedules = [
+  {period:'morning',label:'早',dose:1,enabled:true},
+  {period:'noon',label:'午',dose:1,enabled:false},
+  {period:'evening',label:'晚',dose:1,enabled:false},
+];
+
+function buildScheduleEditor(schedules){
+  const ed = document.getElementById('scheduleEditor');
+  const items = schedules && schedules.length ? schedules : defaultSchedules;
+  ed.innerHTML = items.map((s,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;background:#f8fafc;border-radius:10px;padding:10px">
+      <input type="checkbox" id="sch_en_${i}" ${s.enabled||s.enabled===undefined?'checked':''} style="width:18px;height:18px;flex-shrink:0">
+      <select id="sch_period_${i}" style="flex:0 0 80px">
+        <option value="morning" ${s.period==='morning'?'selected':''}>早</option>
+        <option value="noon" ${s.period==='noon'?'selected':''}>午</option>
+        <option value="evening" ${s.period==='evening'?'selected':''}>晚</option>
+        <option value="custom" ${s.period==='custom'?'selected':''}>自定义</option>
+      </select>
+      <input type="text" id="sch_label_${i}" value="${s.label||''}" placeholder="标签" style="flex:1;min-width:60px">
+      <input type="number" id="sch_dose_${i}" value="${s.dose||1}" min="0.25" step="0.25" style="width:70px">
+      <span style="font-size:13px;color:var(--muted)">片</span>
+    </div>`).join('');
+  // 添加"+"按钮
+  ed.innerHTML += `<button class="btn btn-ghost btn-sm" onclick="addScheduleRow()">＋ 添加时段</button>`;
+}
+
+function addScheduleRow(){
+  const ed = document.getElementById('scheduleEditor');
+  const rows = ed.querySelectorAll('div[style]').length;
+  const newRow = document.createElement('div');
+  newRow.style.cssText='display:flex;align-items:center;gap:10px;background:#f8fafc;border-radius:10px;padding:10px';
+  newRow.innerHTML=`
+    <input type="checkbox" id="sch_en_${rows}" checked style="width:18px;height:18px;flex-shrink:0">
+    <select id="sch_period_${rows}" style="flex:0 0 80px">
+      <option value="morning">早</option><option value="noon">午</option>
+      <option value="evening">晚</option><option value="custom" selected>自定义</option>
+    </select>
+    <input type="text" id="sch_label_${rows}" placeholder="标签" style="flex:1;min-width:60px">
+    <input type="number" id="sch_dose_${rows}" value="1" min="0.25" step="0.25" style="width:70px">
+    <span style="font-size:13px;color:var(--muted)">片</span>`;
+  ed.insertBefore(newRow, ed.lastChild);
+}
+
+function collectSchedules(){
+  const ed = document.getElementById('scheduleEditor');
+  const rows = ed.querySelectorAll('div[style]');
+  return Array.from(rows).map((_, i)=>({
+    period: document.getElementById(`sch_period_${i}`)?.value||'morning',
+    label: document.getElementById(`sch_label_${i}`)?.value||'',
+    dose: parseFloat(document.getElementById(`sch_dose_${i}`)?.value||'1'),
+    enabled: document.getElementById(`sch_en_${i}`)?.checked?1:0,
+  })).filter(s=>s.enabled);
+}
+
+function openAddMedModal(){
+  document.getElementById('editMedId').value='';
+  document.getElementById('medModalTitle').textContent='添加药品';
+  document.getElementById('medName').value='';
+  document.getElementById('medUnit').value='片';
+  document.getElementById('medStock').value='';
+  document.getElementById('medDailyDose').value='1';
+  document.getElementById('medLowStock').value='3';
+  document.getElementById('medNotes').value='';
+  document.getElementById('medPhotoPreview').innerHTML='📷';
+  document.getElementById('medPhotoPreview').className='med-photo-placeholder';
+  document.getElementById('medPhotoFile').value='';
+  buildScheduleEditor([]);
+  document.getElementById('medModal').classList.add('open');
+}
+
+function openEditMedModal(id){
+  const med = medicines.find(m=>m.id===id);
+  if(!med) return;
+  document.getElementById('editMedId').value=id;
+  document.getElementById('medModalTitle').textContent='编辑药品';
+  document.getElementById('medName').value=med.name;
+  document.getElementById('medUnit').value=med.unit;
+  document.getElementById('medStock').value=med.stock;
+  document.getElementById('medDailyDose').value=med.daily_dose;
+  document.getElementById('medLowStock').value=med.low_stock;
+  document.getElementById('medNotes').value=med.notes||'';
+  buildScheduleEditor(med.schedules||[]);
+
+  const preview = document.getElementById('medPhotoPreview');
+  if(med.photo){
+    preview.innerHTML=`<img src="/static/uploads/${med.photo}" style="width:64px;height:64px;border-radius:10px;object-fit:cover">`;
+    preview.className='med-photo';
+  } else {
+    preview.innerHTML='📷'; preview.className='med-photo-placeholder';
+  }
+  document.getElementById('medPhotoFile').value='';
+  document.getElementById('medModal').classList.add('open');
+}
+
+function closeMedModal(){ document.getElementById('medModal').classList.remove('open'); }
+
+function previewMedPhoto(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload=e=>{
+    const p=document.getElementById('medPhotoPreview');
+    p.innerHTML=`<img src="${e.target.result}" style="width:64px;height:64px;border-radius:10px;object-fit:cover">`;
+    p.className='med-photo';
+  };
+  reader.readAsDataURL(file);
+}
+
+async function saveMedicine(){
+  const name = document.getElementById('medName').value.trim();
+  if(!name){ toast('请填写药品名称'); return; }
+  const schedules = collectSchedules();
+  const data={
+    name, unit:document.getElementById('medUnit').value,
+    stock:parseFloat(document.getElementById('medStock').value)||0,
+    daily_dose:parseFloat(document.getElementById('medDailyDose').value)||1,
+    low_stock:parseFloat(document.getElementById('medLowStock').value)||3,
+    notes:document.getElementById('medNotes').value,
+    schedules
+  };
+  const editId = document.getElementById('editMedId').value;
+  try{
+    let medId;
+    if(editId){
+      await api('PUT',`/api/medicines/${editId}`,data);
+      medId=editId;
+      toast('✅ 更新成功');
+    } else {
+      const res=await api('POST','/api/medicines',data);
+      medId=res.id;
+      toast('✅ 添加成功');
+    }
+    // 上传照片
+    const fileInput=document.getElementById('medPhotoFile');
+    if(fileInput.files.length){
+      const fd=new FormData();
+      fd.append('photo',fileInput.files[0]);
+      await fetch(`/api/medicines/${medId}/photo`,{method:'POST',body:fd});
+    }
+    closeMedModal();
+    await loadStock();
+    if(currentPage==='meds') loadTodayMeds();
+  } catch(e){ toast('❌ '+e.message); }
+}
+
+async function deleteMed(id){
+  if(!confirm('确认删除该药品及其所有记录？此操作不可撤销。')) return;
+  try{
+    await api('DELETE',`/api/medicines/${id}`);
+    await loadStock();
+    await loadTodayMeds();
+    toast('已删除');
+  } catch(e){ toast('❌ '+e.message); }
+}
+
+// 库存补充 Modal
+function openStockModal(id, name, stock, unit){
+  document.getElementById('stockMedId').value=id;
+  document.getElementById('stockModalTitle').textContent=`补充 · ${name}`;
+  document.getElementById('stockCurrentInfo').textContent=`当前库存：${stock}${unit}`;
+  document.getElementById('stockAmount').value='';
+  document.getElementById('stockModal').classList.add('open');
+}
+function closeStockModal(){ document.getElementById('stockModal').classList.remove('open'); }
+
+async function confirmStock(){
+  const id=document.getElementById('stockMedId').value;
+  const amount=parseFloat(document.getElementById('stockAmount').value);
+  if(!amount||amount<=0){ toast('请输入有效数量'); return; }
+  try{
+    await api('POST',`/api/medicines/${id}/stock`,{amount});
+    closeStockModal();
+    await loadStock();
+    if(currentPage==='meds') await loadTodayMeds();
+    toast('✅ 库存已补充');
+  } catch(e){ toast('❌ '+e.message); }
+}
+
+// 照片上传
+function uploadPhotoFor(medId){
+  const input=document.createElement('input');
+  input.type='file'; input.accept='image/*';
+  input.onchange=async()=>{
+    if(!input.files.length) return;
+    const fd=new FormData(); fd.append('photo',input.files[0]);
+    try{
+      await fetch(`/api/medicines/${medId}/photo`,{method:'POST',body:fd});
+      toast('✅ 照片上传成功');
+      loadStock();
+    } catch(e){ toast('❌ 上传失败'); }
+  };
+  input.click();
+}
+
+function previewImg(src){
+  document.getElementById('imgPreviewSrc').src=src;
+  document.getElementById('imgPreviewOverlay').style.display='flex';
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 服药日历
+// ═══════════════════════════════════════════════════════════════════════
+async function loadCalendar(){
+  document.getElementById('calTitle').textContent=`${calYear}年${calMonth}月`;
+  let data;
+  try{ data=await api('GET',`/api/med-calendar?year=${calYear}&month=${calMonth}`); }
+  catch(e){ toast('❌ 加载失败'); return; }
+
+  const cal=data.calendar;
+  const first=new Date(calYear,calMonth-1,1);
+  const startWday=first.getDay(); // 0=Sun
+  const daysInMonth=new Date(calYear,calMonth,0).getDate();
+  const today=todayStr();
+
+  let html='';
+  // 星期头
+  ['日','一','二','三','四','五','六'].forEach(d=>{
+    html+=`<div class="cal-header">${d}</div>`;
+  });
+  // 空格
+  for(let i=0;i<startWday;i++) html+=`<div class="cal-day empty"></div>`;
+  // 日期
+  for(let d=1;d<=daysInMonth;d++){
+    const ds=`${calYear}-${String(calMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const status=cal[ds]||'future';
+    const isToday=ds===today;
+    html+=`<div class="cal-day ${status} ${isToday?'today':''}" onclick="showCalDay('${ds}')">${d}</div>`;
+  }
+  document.getElementById('calGrid').innerHTML=html;
+}
+
+function calPrev(){
+  calMonth--;
+  if(calMonth<1){calMonth=12;calYear--;}
+  loadCalendar();
+}
+function calNext(){
+  calMonth++;
+  if(calMonth>12){calMonth=1;calYear++;}
+  loadCalendar();
+}
+
+async function showCalDay(ds){
+  document.getElementById('calDayDetail').style.display='block';
+  document.getElementById('calDetailTitle').textContent=`${ds} 服药详情`;
+  try{
+    const data=await api('GET',`/api/med-day-detail?date=${ds}`);
+    const {logs,schedules}=data;
+    let html='';
+    if(!logs.length){
+      html=`<div style="color:var(--muted);font-size:14px;padding:10px 0">当天暂无服药记录</div>`;
+    } else {
+      const pLabels={morning:'早',noon:'午',evening:'晚',custom:'自定义','':'其他'};
+      html=logs.map(l=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:20px">💊</span>
+          <div>
+            <span style="font-weight:700">${l.med_name}</span>
+            <span class="tag tag-green" style="margin-left:6px">${l.dose}${l.unit}</span>
+            <span class="tag tag-blue" style="margin-left:4px">${pLabels[l.period]||l.period||'其他'}</span>
+            <div style="font-size:12px;color:var(--muted)">${fmt(l.taken_at)}</div>
+          </div>
+        </div>`).join('');
+    }
+    document.getElementById('calDetailContent').innerHTML=html;
+  } catch(e){ document.getElementById('calDetailContent').innerHTML='<p style="color:red">加载失败</p>'; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 血压心率
+// ═══════════════════════════════════════════════════════════════════════
+async function loadBP(){
+  document.getElementById('bpTime').value=localDatetimeStr();
+  let records=[];
+  try{ records=await api('GET','/api/bp?days=30'); } catch{}
+  renderBPChart(records);
+  renderBPList(records);
+}
+
+function getBPClass(sys,dia){
+  if(sys>=140||dia>=90) return 'high';
+  if(sys<90||dia<60) return 'low';
+  return 'normal';
+}
+
+function renderBPList(records){
+  const container=document.getElementById('bpList');
+  if(!records.length){
+    container.innerHTML=`<div class="empty-state"><div class="empty-icon">❤️</div><p>暂无血压记录</p></div>`;
+    return;
+  }
+  container.innerHTML=records.slice(0,20).map(r=>{
+    const cls=getBPClass(r.systolic,r.diastolic);
+    return `<div class="bp-record-item">
+      <div>
+        <div class="bp-value ${cls}">${r.systolic}/${r.diastolic} <span style="font-size:16px;font-weight:600">mmHg</span>
+          ${r.pulse?`<span style="font-size:15px;font-weight:600;margin-left:8px">💓${r.pulse}</span>`:''}
+        </div>
+        <div class="bp-meta">${fmt(r.measured_at)}${r.note?' · '+r.note:''}</div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteBP(${r.id})">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function renderBPChart(records){
+  const canvas=document.getElementById('bpChart');
+  if(bpChartInstance){ bpChartInstance.destroy(); bpChartInstance=null; }
+  if(!records.length) return;
+
+  // 按日期聚合（取每天平均值）
+  const byDate={};
+  records.forEach(r=>{
+    const d=r.date;
+    if(!byDate[d]) byDate[d]={sys:[],dia:[],pulse:[]};
+    byDate[d].sys.push(r.systolic);
+    byDate[d].dia.push(r.diastolic);
+    if(r.pulse) byDate[d].pulse.push(r.pulse);
+  });
+  const dates=Object.keys(byDate).sort();
+  const avg=arr=>Math.round(arr.reduce((a,b)=>a+b,0)/arr.length);
+  const labels=dates.map(d=>d.substring(5));
+  const sysData=dates.map(d=>avg(byDate[d].sys));
+  const diaData=dates.map(d=>avg(byDate[d].dia));
+  const pulseData=dates.map(d=>byDate[d].pulse.length?avg(byDate[d].pulse):null);
+
+  bpChartInstance=new Chart(canvas,{
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'收缩压',data:sysData,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.1)',tension:.3,fill:true,pointRadius:3},
+        {label:'舒张压',data:diaData,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.1)',tension:.3,fill:true,pointRadius:3},
+        {label:'心率',data:pulseData,borderColor:'#f59e0b',borderDash:[4,4],tension:.3,pointRadius:3,yAxisID:'y2'},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{font:{size:12}}}},
+      scales:{
+        y:{min:40,max:200,title:{display:true,text:'mmHg'}},
+        y2:{position:'right',min:30,max:180,title:{display:true,text:'次/分'},grid:{drawOnChartArea:false}},
+        x:{ticks:{maxTicksLimit:10}}
+      }
+    }
+  });
+}
+
+async function saveBP(){
+  const sys=parseInt(document.getElementById('bpSystolic').value);
+  const dia=parseInt(document.getElementById('bpDiastolic').value);
+  const pulse=parseInt(document.getElementById('bpPulse').value)||null;
+  const note=document.getElementById('bpNote').value;
+  const t=document.getElementById('bpTime').value.replace('T',' ')+':00';
+  if(!sys||!dia||sys<60||dia<40){ toast('请填写正确的血压值'); return; }
+  try{
+    await api('POST','/api/bp',{systolic:sys,diastolic:dia,pulse,note,measured_at:t});
+    toast('✅ 记录成功');
+    document.getElementById('bpSystolic').value='';
+    document.getElementById('bpDiastolic').value='';
+    document.getElementById('bpPulse').value='';
+    document.getElementById('bpNote').value='';
+    loadBP();
+  } catch(e){ toast('❌ '+e.message); }
+}
+
+async function deleteBP(id){
+  if(!confirm('确认删除？')) return;
+  try{ await api('DELETE',`/api/bp/${id}`); toast('已删除'); loadBP(); }
+  catch(e){ toast('❌ '+e.message); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 大便记录
+// ═══════════════════════════════════════════════════════════════════════
+async function loadBowel(){
+  let records=[],stats={};
+  try{ records=await api('GET','/api/bowel?limit=30'); } catch{}
+  try{ stats=await api('GET','/api/bowel/stats'); } catch{}
+
+  // 统计卡
+  const sg=document.getElementById('bowelStats');
+  sg.innerHTML=`
+    <div class="stat-box"><div class="stat-num">${stats.hours_since!=null?stats.hours_since:'--'}</div><div class="stat-label">距上次(小时)</div></div>
+    <div class="stat-box"><div class="stat-num">${stats.avg_interval_hours||'--'}</div><div class="stat-label">平均间隔(小时)</div></div>
+    <div class="stat-box"><div class="stat-num">${stats.count||0}</div><div class="stat-label">近期次数</div></div>`;
+
+  const container=document.getElementById('bowelList');
+  if(!records.length){
+    container.innerHTML=`<div class="empty-state"><div class="empty-icon">🚽</div><p>暂无记录，点击上方按钮记录</p></div>`;
+    return;
+  }
+  container.innerHTML=records.map(r=>`
+    <div class="bowel-item">
+      <div>
+        <span style="font-weight:700">🚽 大便</span>
+        <div style="font-size:13px;color:var(--muted)">${fmt(r.recorded_at)}${r.note?' · '+r.note:''}</div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteBowel(${r.id})">✕</button>
+    </div>`).join('');
+}
+
+async function logBowel(){
+  try{
+    await api('POST','/api/bowel',{});
+    toast('✅ 已记录！');
+    loadBowel();
+  } catch(e){ toast('❌ '+e.message); }
+}
+
+async function deleteBowel(id){
+  if(!confirm('确认删除？')) return;
+  try{ await api('DELETE',`/api/bowel/${id}`); toast('已删除'); loadBowel(); }
+  catch(e){ toast('❌ '+e.message); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 备份与恢复
+// ═══════════════════════════════════════════════════════════════════════
+function downloadJSON(){
+  window.location.href='/api/backup/json';
+}
+function downloadCSV(){
+  const t=document.getElementById('csvTable').value;
+  window.location.href=`/api/backup/csv?table=${t}`;
+}
+async function restoreData(){
+  const file=document.getElementById('restoreFile').files[0];
+  if(!file){ toast('请先选择 JSON 文件'); return; }
+  if(!confirm('⚠️ 恢复数据将覆盖所有现有数据，请确认！')) return;
+  const fd=new FormData(); fd.append('file',file);
+  try{
+    const res=await fetch('/api/restore',{method:'POST',body:fd});
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.error);
+    toast(`✅ 恢复成功！备份时间：${data.backup_time}`);
+    await loadMedicines();
+  } catch(e){ toast('❌ '+e.message); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 启动
+// ═══════════════════════════════════════════════════════════════════════
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+data/*.db
+app/static/uploads/*
+!app/static/uploads/.gitkeep
+.DS_Store
+*.egg-info/
+dist/
+build/
+
+# 工作助手内存文件
+.workbuddy/
+
+# SQLite WAL 文件
+data/*.db-shm
+data/*.db-wal
+
+# 服务器日志
+server.err
+server.log
