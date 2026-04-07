@@ -20,22 +20,36 @@
 
 ```bash
 # 克隆/下载项目
-git clone <repo-url> health-tracker
+git clone https://github.com/OLShopping/health-tracker.git health-tracker
 cd health-tracker
 
+# 首次配置（复制环境变量文件）
+cp .env.example .env
+
 # 启动
-docker compose up -d
+docker compose up -d --build
 
 # 访问
-open http://localhost:5000
+open http://localhost:5555
 ```
 
 ### 方式二：飞牛 NAS
 
 1. 在飞牛 NAS 的 Docker 管理界面，选择"从 Compose 部署"
 2. 上传本项目目录，或直接粘贴 `docker-compose.yml` 内容
-3. 配置映射路径（建议将 `./data` 映射到 NAS 上的固定目录）
+3. 复制 `.env.example` 为 `.env`，填入 `GITHUB_TOKEN`（公开仓库可留空）
 4. 启动容器
+
+### 🚄 NAS 自动更新（每次代码更新后）
+
+> 将新代码推送到 GitHub 后，在 NAS 上执行以下命令即可拉取最新版本：
+
+```bash
+cd /path/to/health-tracker
+docker compose up -d --build
+```
+
+Dockerfile 会自动从 GitHub 拉取最新代码，无需手动上传文件。
 
 ### 方式三：本地直接运行（开发用）
 

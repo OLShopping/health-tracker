@@ -2,20 +2,30 @@ version: '3.8'
 
 services:
   health-tracker:
-    build: .
+    # ── 从 GitHub 构建（每次 rebuild 拉取最新代码） ──
+    build:
+      context: .
+      args:
+        - GITHUB_TOKEN=${GITHUB_TOKEN:-}   # 私有仓库需填入 token，公开仓库可留空
+        - BRANCH=${BRANCH:-main}           # 可指定分支，默认为 main
+
     container_name: health-tracker
     ports:
       - "5555:5555"
+
     volumes:
-      - ./data:/data
-      - ./uploads:/app/static/uploads
-      - ./app:/app/app          # 挂载代码目录：改完文件重启容器即生效，无需重新构建镜像
+      - ./data:/data              # 数据持久化
+      - ./uploads:/app/static/uploads  # 上传文件持久化
+      # 注意：不再挂载 ./app，避免覆盖镜像内从 GitHub 拉取的最新代码
+
     environment:
       - DB_PATH=/data/health.db
       - SECRET_KEY=change-me-in-production
       - TZ=Asia/Shanghai
       - PORT=5555
+
     restart: unless-stopped
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5555/api/health"]
       interval: 30s
