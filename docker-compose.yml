@@ -11,7 +11,7 @@ services:
 
     container_name: health-tracker
     ports:
-      - "5555:5555"
+      - "4321:5555"
 
     volumes:
       - ./data:/data              # 数据持久化
@@ -23,6 +23,7 @@ services:
       - SECRET_KEY=change-me-in-production
       - TZ=Asia/Shanghai
       - PORT=5555
+      - HEALTH_PORT=5555
 
     restart: unless-stopped
 

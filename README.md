@@ -30,7 +30,7 @@ cp .env.example .env
 docker compose up -d --build
 
 # 访问
-open http://localhost:5555
+open http://localhost:4321
 ```
 
 ### 方式二：飞牛 NAS
