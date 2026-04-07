@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>🏥 健康追踪</title>
-<meta name="version" content="2.4">
+<meta name="version" content="2.5">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <style>
@@ -1458,9 +1458,35 @@ async function loadBowel(){
 
   // 统计卡
   const sg=document.getElementById('bowelStats');
+
+  // 将小时转换为「约X天」文本，最小单位0.5天
+  function hoursToDays(h){
+    if(h==null||h==='--') return '';
+    const days = h/24;
+    if(days < 0.5) return '不足半天';
+    // 按0.5天为步长取整
+    const rounded = Math.round(days*2)/2;
+    if(rounded === 0.5) return '约半天';
+    if(Number.isInteger(rounded)) return `约${rounded}天`;
+    return `约${Math.floor(rounded)}天半`;
+  }
+
+  const sinceHours = stats.hours_since!=null ? stats.hours_since : null;
+  const avgHours   = stats.avg_interval_hours || null;
+  const sinceDayStr = hoursToDays(sinceHours);
+  const avgDayStr   = hoursToDays(avgHours);
+
   sg.innerHTML=`
-    <div class="stat-box"><div class="stat-num">${stats.hours_since!=null?stats.hours_since:'--'}</div><div class="stat-label">距上次(小时)</div></div>
-    <div class="stat-box"><div class="stat-num">${stats.avg_interval_hours||'--'}</div><div class="stat-label">平均间隔(小时)</div></div>
+    <div class="stat-box">
+      <div class="stat-num">${sinceHours!=null?sinceHours:'--'}</div>
+      <div class="stat-label">距上次(小时)</div>
+      ${sinceDayStr?`<div style="font-size:12px;color:var(--primary);font-weight:600;margin-top:4px">${sinceDayStr}</div>`:''}
+    </div>
+    <div class="stat-box">
+      <div class="stat-num">${avgHours||'--'}</div>
+      <div class="stat-label">平均间隔(小时)</div>
+      ${avgDayStr?`<div style="font-size:12px;color:var(--primary);font-weight:600;margin-top:4px">${avgDayStr}</div>`:''}
+    </div>
     <div class="stat-box"><div class="stat-num">${stats.count||0}</div><div class="stat-label">近期次数</div></div>`;
 
   const container=document.getElementById('bowelList');
