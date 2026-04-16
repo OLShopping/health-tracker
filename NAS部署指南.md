@@ -47,9 +47,7 @@ cd /volume1/docker/health-tracker
 
 ---
 
-## 四、下载必要文件
-
-### 方法一：Git 克隆（推荐，代码更新后只需 pull）
+## 四、克隆代码到 NAS 本地目录
 
 ```bash
 cd /volume1/docker/health-tracker
@@ -57,15 +55,10 @@ cd /volume1/docker/health-tracker
 # 克隆仓库（公开仓库无需 token）
 git clone https://github.com/OLShopping/health-tracker.git .
 
-# 如果是私有仓库或想确保稳定，拉取指定分支
-# git clone -b main https://github.com/OLShopping/health-tracker.git .
+# 如果目录已存在，先清空再克隆：
+# rm -rf /volume1/docker/health-tracker/*
+# git clone https://github.com/OLShopping/health-tracker.git .
 ```
-
-### 方法二：手动下载（如果 Git 不可用）
-
-1. 浏览器打开 https://github.com/OLShopping/health-tracker
-2. 点击 **Code → Download ZIP**
-3. 上传到 NAS 并解压到 `/volume1/docker/health-tracker/`
 
 ---
 
@@ -160,12 +153,15 @@ http://你的NAS_IP地址:4321
 
 ## 十、后续代码更新流程
 
-代码更新后（GitHub 有新 commit），只需一条命令：
+代码更新后（GitHub 有新 commit），需要先拉取本地文件，再重建容器：
 
 ```bash
 cd /volume1/docker/health-tracker
 
-# 拉取最新代码 + 重建容器
+# 拉取最新代码到本地
+git pull
+
+# 重建容器
 docker compose up -d --build
 ```
 
@@ -178,20 +174,14 @@ docker compose up -d --build
 mkdir -p /volume1/docker/health-tracker
 cd /volume1/docker/health-tracker
 
-# 2. 克隆代码
+# 2. 克隆代码（首次）
 git clone https://github.com/OLShopping/health-tracker.git .
 
-# 3. 创建 .env
-cat > .env << 'EOF'
-GITHUB_TOKEN=
-BRANCH=main
-EOF
-
-# 4. 创建持久化目录
+# 3. 创建持久化目录
 mkdir -p data uploads
 chmod 777 data uploads
 
-# 5. 启动
+# 4. 启动（构建镜像 + 运行容器）
 docker compose up -d --build
 
 # 6. 等待 10 秒后验证
@@ -232,7 +222,8 @@ docker compose down --rmi all
 | `curl: Connection refused` | 等待 30 秒让容器启动完成 |
 | 页面空白/API 报错 | 查看日志 `docker compose logs` |
 | 端口 4321 被占用 | 修改 `docker-compose.yml` 中 `"4321:5555"` 改为 `"4322:5555"` |
-| Git clone 失败 | 检查网络，或使用 Download ZIP 方式 |
+| `docker build` 失败 | 检查网络是否通畅；镜像层缓存可能导致旧错误，加 `--no-cache` 强制重建 |
+| 代码未更新 | 先执行 `git pull`，再 `docker compose up -d --build` |
 
 ---
 

@@ -1,39 +1,25 @@
 # ============================================================
-# 构建参数：
-#   GITHUB_TOKEN : GitHub 个人访问令牌（私有仓库需要，公开仓库可省略）
-#   BRANCH       : 要构建的分支，默认为 main
+# 健康追踪 - Docker 构建文件
 #
-# 用法示例（无 token，克隆 main 分支）：
-#   docker build -t health-tracker .
+# 部署说明：
+#   1. 本地更新代码后，推送到 GitHub
+#   2. 在 NAS 上 git pull 拉取最新代码到本地目录
+#   3. 执行 docker compose up -d --build
 #
-# 带 token 克隆私有仓库：
-#   docker build \
-#     --build-arg GITHUB_TOKEN=ghp_xxx \
-#     --build-arg BRANCH=main \
-#     -t health-tracker .
+# （COPY 构建阶段使用本地文件，build 时无需访问外网）
 # ============================================================
 
 FROM python:3.11-slim
-
-ARG GITHUB_TOKEN=""
-ARG BRANCH=main
 
 WORKDIR /app
 
 # -------- 安装系统依赖 ----------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git curl \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# -------- 克隆代码（每次构建总是拉取最新） ----------
-# 私有仓库：使用 token 拼接 URL
-# 公开仓库：直接用 HTTPS URL
-RUN export BRANCH="${BRANCH:-main}" && \
-    if [ -n "$GITHUB_TOKEN" ]; then \
-        git clone --depth=1 --branch "$BRANCH" https://${GITHUB_TOKEN}@github.com/OLShopping/health-tracker.git /app; \
-    else \
-        git clone --depth=1 --branch "$BRANCH" https://github.com/OLShopping/health-tracker.git /app; \
-    fi
+# -------- 复制本地代码（NAS 上 git pull 后即可用最新代码） ----------
+COPY . /app/
 
 # -------- 安装 Python 依赖 ----------
 WORKDIR /app
