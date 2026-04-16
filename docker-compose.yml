@@ -7,7 +7,7 @@ services:
       context: .
       args:
         - GITHUB_TOKEN=${GITHUB_TOKEN:-}   # 私有仓库需填入 token，公开仓库可留空
-        - BRANCH=${BRANCH:-main}           # 可指定分支，默认为 main
+        - BRANCH=${BRANCH:-main}           # 默认为 main，GitHub 仓库的默认分支
 
     container_name: health-tracker
     ports:

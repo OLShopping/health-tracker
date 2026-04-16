@@ -28,14 +28,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # -------- 克隆代码（每次构建总是拉取最新） ----------
 # 私有仓库：使用 token 拼接 URL
 # 公开仓库：直接用 HTTPS URL
-RUN if [ -n "$GITHUB_TOKEN" ]; then \
-    git clone https://${GITHUB_TOKEN}@github.com/OLShopping/health-tracker.git /app; \
-else \
-    git clone https://github.com/OLShopping/health-tracker.git /app; \
-    fi \
-    && cd /app \
-    && git fetch origin ${BRANCH} \
-    && git checkout ${BRANCH}
+RUN export BRANCH="${BRANCH:-main}" && \
+    if [ -n "$GITHUB_TOKEN" ]; then \
+        git clone --depth=1 --branch "$BRANCH" https://${GITHUB_TOKEN}@github.com/OLShopping/health-tracker.git /app; \
+    else \
+        git clone --depth=1 --branch "$BRANCH" https://github.com/OLShopping/health-tracker.git /app; \
+    fi
 
 # -------- 安装 Python 依赖 ----------
 WORKDIR /app
