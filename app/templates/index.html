@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>🏥 健康追踪</title>
-<meta name="version" content="2.5">
+<meta name="version" content="2.6">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <style>
@@ -110,6 +110,20 @@ textarea{resize:vertical;min-height:70px}
 .cal-day.missed{background:#fecaca;color:#991b1b}
 .cal-day.future{background:#f1f5f9;color:#cbd5e1;cursor:default}
 .cal-day.empty{background:transparent;cursor:default}
+/* ── 日历选中态 ── */
+.cal-day.selected{
+  outline:3px solid var(--primary);
+  outline-offset:1px;
+  transform:scale(1.18);
+  z-index:2;
+  box-shadow:0 2px 10px rgba(79,142,247,.45);
+  font-weight:800;
+}
+.cal-day.selected.full{background:#4ade80;color:#14532d}
+.cal-day.selected.partial{background:#fbbf24;color:#78350f}
+.cal-day.selected.missed{background:#f87171;color:#7f1d1d}
+.cal-day.selected.future{background:#e2e8f0;color:#64748b}
+.cal-day.selected.today{box-shadow:0 0 0 3px var(--primary),0 2px 10px rgba(79,142,247,.45)}
 .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .cal-nav-btn{background:none;border:none;font-size:20px;cursor:pointer;color:var(--primary);
   padding:4px 10px;border-radius:8px;transition:background .15s}
@@ -587,7 +601,7 @@ textarea{resize:vertical;min-height:70px}
 const API = '';  // 同域部署，空前缀
 let medicines = [];
 let currentPage = 'meds';
-let calYear, calMonth;
+let calYear, calMonth, calSelectedDate = null;
 let bpChartInstance = null;
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1140,7 +1154,8 @@ async function loadCalendar(){
     const ds=`${calYear}-${String(calMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const status=cal[ds]||'future';
     const isToday=ds===today;
-    html+=`<div class="cal-day ${status} ${isToday?'today':''}" onclick="showCalDay('${ds}')">${d}</div>`;
+    const isSelected=ds===calSelectedDate;
+    html+=`<div class="cal-day ${status}${isToday?' today':''}${isSelected?' selected':''}" onclick="showCalDay('${ds}')">${d}</div>`;
   }
   document.getElementById('calGrid').innerHTML=html;
 }
@@ -1157,29 +1172,148 @@ function calNext(){
 }
 
 async function showCalDay(ds){
+  // ── 切换选中态 ──
+  calSelectedDate = ds;
+  document.querySelectorAll('.cal-day').forEach(el=>{
+    el.classList.toggle('selected', el.getAttribute('onclick')===`showCalDay('${ds}')`);
+  });
+
   document.getElementById('calDayDetail').style.display='block';
-  document.getElementById('calDetailTitle').textContent=`${ds} 服药详情`;
+  // 日期标题格式化为 M月D日
+  const [y,m,d]=ds.split('-');
+  document.getElementById('calDetailTitle').textContent=`${parseInt(m)}月${parseInt(d)}日 服药详情`;
+
   try{
     const data=await api('GET',`/api/med-day-detail?date=${ds}`);
-    const {logs,schedules}=data;
+    const {logs, schedules}=data;
+
+    // ── 按药物名分组 ──
+    // schedules: 当天应服的计划列表（medicine_id, med_name, period, dose, unit）
+    // logs: 实际服药记录（medicine_id, med_name, period, dose, unit, taken_at）
+
+    // 先收集所有涉及的药物（从 schedules 和 logs 合并）
+    const medMap = {}; // med_name -> { schedules: [...], logs: [...] }
+
+    // 加入计划
+    if(schedules && schedules.length){
+      schedules.forEach(s=>{
+        const name = s.med_name || s.name || '未知药品';
+        if(!medMap[name]) medMap[name]={schedules:[],logs:[]};
+        medMap[name].schedules.push(s);
+      });
+    }
+    // 加入实际记录
+    logs.forEach(l=>{
+      const name = l.med_name || '未知药品';
+      if(!medMap[name]) medMap[name]={schedules:[],logs:[]};
+      medMap[name].logs.push(l);
+    });
+
+    const pLabels={morning:'早',noon:'午',evening:'晚',custom:'其他','':'其他'};
+
     let html='';
-    if(!logs.length){
-      html=`<div style="color:var(--muted);font-size:14px;padding:10px 0">当天暂无服药记录</div>`;
+    if(!Object.keys(medMap).length){
+      html=`<div style="color:var(--muted);font-size:14px;padding:10px 0;text-align:center">当天暂无服药记录</div>`;
     } else {
-      const pLabels={morning:'早',noon:'午',evening:'晚',custom:'自定义','':'其他'};
-      html=logs.map(l=>`
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:20px">💊</span>
-          <div>
-            <span style="font-weight:700">${l.med_name}</span>
-            <span class="tag tag-green" style="margin-left:6px">${l.dose}${l.unit}</span>
-            <span class="tag tag-blue" style="margin-left:4px">${pLabels[l.period]||l.period||'其他'}</span>
-            <div style="font-size:12px;color:var(--muted)">${fmt(l.taken_at)}</div>
+      Object.entries(medMap).forEach(([medName, {schedules:scheds, logs:medLogs}])=>{
+        // 判断整体状态：全服/部分/未服
+        const hasSched = scheds.length > 0;
+        const hasLog   = medLogs.length > 0;
+
+        let overallBg, overallBorder, overallIcon, overallLabel;
+        if(!hasSched && hasLog){
+          // 无计划但有记录 → 临时服药，绿
+          overallBg='#f0fdf4'; overallBorder='#4ade80';
+          overallIcon='✅'; overallLabel='已服';
+        } else if(hasSched && medLogs.length >= scheds.length){
+          // 计划都服了 → 全服，绿
+          overallBg='#f0fdf4'; overallBorder='#4ade80';
+          overallIcon='✅'; overallLabel='全部已服';
+        } else if(hasSched && medLogs.length > 0){
+          // 部分服了 → 黄
+          overallBg='#fffbeb'; overallBorder='#fbbf24';
+          overallIcon='⚠️'; overallLabel='部分已服';
+        } else {
+          // 完全没服 → 红
+          overallBg='#fff1f2'; overallBorder='#f87171';
+          overallIcon='❌'; overallLabel='未服药';
+        }
+
+        // 时段列表：优先展示 schedules，再补充 logs 里多出来的
+        const periodItems = [];
+        // 收集已记录的 period
+        const loggedPeriods = new Set(medLogs.map(l=>l.period));
+
+        if(hasSched){
+          scheds.forEach(s=>{
+            const p = s.period||'';
+            const matched = medLogs.filter(l=>l.period===p);
+            const taken = matched.length > 0;
+            const takenDose = matched.reduce((sum,l)=>sum+l.dose,0);
+            periodItems.push({
+              period:p,
+              label:pLabels[p]||p||'其他',
+              schedDose:s.dose,
+              unit:s.unit||matched[0]?.unit||'',
+              taken,
+              takenDose,
+              takenAt:matched[0]?.taken_at||null,
+            });
+          });
+        }
+        // logs 里有但 schedules 里没有的时段（如临时加服）
+        medLogs.forEach(l=>{
+          const inSched = scheds.some(s=>s.period===l.period);
+          if(!inSched){
+            periodItems.push({
+              period:l.period,
+              label:pLabels[l.period]||l.period||'其他',
+              schedDose:null,
+              unit:l.unit||'',
+              taken:true,
+              takenDose:l.dose,
+              takenAt:l.taken_at,
+            });
+          }
+        });
+
+        html+=`
+        <div style="border-radius:12px;border:2px solid ${overallBorder};background:${overallBg};
+                    padding:12px 14px;margin-bottom:12px">
+          <!-- 药品标题行 -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${periodItems.length?'10px':'0'}">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:20px">💊</span>
+              <span style="font-size:15px;font-weight:800">${medName}</span>
+            </div>
+            <span style="font-size:13px;font-weight:700;padding:3px 10px;border-radius:20px;
+                         background:${overallBorder}22;color:${overallBorder==='#4ade80'?'#166534':overallBorder==='#fbbf24'?'#78350f':'#991b1b'}">${overallIcon} ${overallLabel}</span>
           </div>
-        </div>`).join('');
+          <!-- 时段明细 -->
+          ${periodItems.map(item=>{
+            let rowBg, rowColor, dotColor, statusText;
+            if(item.taken){
+              rowBg='#dcfce7'; rowColor='#166534'; dotColor='#22c55e';
+              statusText=`✅ 已服 ${item.takenDose}${item.unit}${item.takenAt?' · '+fmt(item.takenAt):''}`;
+            } else {
+              rowBg='#fee2e2'; rowColor='#991b1b'; dotColor='#ef4444';
+              statusText=`❌ 未服${item.schedDose!=null?'（应服'+item.schedDose+item.unit+'）':''}`;
+            }
+            return `
+            <div style="display:flex;align-items:center;gap:10px;padding:6px 10px;
+                        border-radius:8px;background:${rowBg};margin-bottom:6px">
+              <div style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex-shrink:0"></div>
+              <span style="font-size:13px;font-weight:700;color:var(--text);min-width:24px">${item.label}</span>
+              <span style="font-size:13px;color:${rowColor};flex:1">${statusText}</span>
+            </div>`;
+          }).join('')}
+        </div>`;
+      });
     }
     document.getElementById('calDetailContent').innerHTML=html;
-  } catch(e){ document.getElementById('calDetailContent').innerHTML='<p style="color:red">加载失败</p>'; }
+  } catch(e){
+    document.getElementById('calDetailContent').innerHTML='<p style="color:red">加载失败：'+e.message+'</p>';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
