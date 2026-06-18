@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>🏥 健康追踪</title>
-<meta name="version" content="2.7">
+<meta name="version" content="2.8">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <style>
@@ -238,11 +238,12 @@ textarea{resize:vertical;min-height:70px}
 <!-- 顶栏 -->
 <div class="topbar">
   <div>
-    <h1>🏥 健康追踪</h1>
+    <h1>🏥 健康追踪 <span id="appVersionBadge" style="font-size:11px;font-weight:400;color:var(--muted);vertical-align:middle;opacity:.7"></span></h1>
     <div class="date-info" id="topDate"></div>
   </div>
   <nav class="desktop-nav">
     <button class="nav-btn active" onclick="switchPage('meds')">💊 服药</button>
+    <button class="nav-btn" onclick="switchPage('schedule')">📋 计划</button>
     <button class="nav-btn" onclick="switchPage('stock')">📦 库存</button>
     <button class="nav-btn" onclick="switchPage('calendar')">📅 日历</button>
     <button class="nav-btn" onclick="switchPage('bp')">❤️ 血压</button>
@@ -678,6 +679,10 @@ function switchPage(name){
 // 初始化
 // ═══════════════════════════════════════════════════════════════════════
 async function init(){
+  // 显示版本号
+  const verMeta = document.querySelector('meta[name="version"]');
+  if(verMeta){ const el=document.getElementById('appVersionBadge'); if(el) el.textContent='v'+verMeta.getAttribute('content'); }
+
   // 更新顶部日期
   const now = new Date();
   const weekNames=['日','一','二','三','四','五','六'];
@@ -1069,10 +1074,10 @@ async function loadSchedule(){
   }
 
   const PERIOD_META = {
-    morning:{icon:'🌅',label:'早餐后'},
-    noon:{icon:'☀️',label:'午餐后'},
-    evening:{icon:'🌆',label:'晚餐后'},
-    custom:{icon:'⏰',label:'其他时段'},
+    morning:{icon:'🌅',label:'早餐后',short:'早'},
+    noon:{icon:'☀️',label:'午餐后',short:'中'},
+    evening:{icon:'🌆',label:'晚餐后',short:'晚'},
+    custom:{icon:'⏰',label:'其他时段',short:'其他'},
   };
   const PERIOD_ORDER = ['morning','noon','evening','custom'];
 
@@ -1082,58 +1087,73 @@ async function loadSchedule(){
 
   let html = '';
 
-  // 正常服药计划
+  // 正常服药方案 — 按药品分组
   if(activeMeds.length){
     html += `<div style="margin-bottom:14px"><span style="font-size:15px;font-weight:700">💊 当前服药方案</span></div>`;
 
-    // 按时段分组渲染
-    PERIOD_ORDER.forEach(period=>{
-      const meta = PERIOD_META[period];
-      // 收集该时段有服药计划的药品
-      const items = [];
-      activeMeds.forEach(med=>{
-        (med.schedules||[]).forEach(s=>{
-          if(s.period===period) items.push({med, schedule:s});
-        });
+    activeMeds.forEach(med=>{
+      // 收集该药品各时段的剂量
+      const periodDoses = [];
+      (med.schedules||[]).forEach(s=>{
+        if(s.dose>0) periodDoses.push(s);
       });
-      if(!items.length) return;
+
+      const totalDose = med.daily_dose;
 
       html += `<div class="card" style="padding:14px 16px;margin-bottom:12px">`;
-      html += `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">`;
-      html += `<span style="font-size:22px">${meta.icon}</span>`;
-      html += `<span style="font-size:16px;font-weight:700">${meta.label}</span>`;
-      html += `<span style="font-size:12px;color:var(--muted);margin-left:auto">${items.length} 种药</span>`;
-      html += `</div>`;
-
-      items.forEach(({med, schedule:s})=>{
-        html += `<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#f8fafc;border-radius:10px;margin-bottom:8px">`;
-        html += `<span style="font-size:18px">💊</span>`;
-        html += `<div style="flex:1;min-width:0">`;
-        html += `<div style="font-weight:600;font-size:15px">${med.name}</div>`;
-        html += `<div style="font-size:12px;color:var(--muted);margin-top:2px">库存：${med.stock}${med.unit} · 日用 ${med.daily_dose}${med.unit}</div>`;
-        html += `</div>`;
-        html += `<div style="text-align:right;flex-shrink:0">`;
-        html += `<div style="font-size:18px;font-weight:700;color:var(--primary)">${s.dose}</div>`;
-        html += `<div style="font-size:11px;color:var(--muted)">${med.unit}</div>`;
-        html += `</div>`;
-        html += `</div>`;
+      // 药品名
+      html += `<div style="font-weight:700;font-size:16px;margin-bottom:10px">${med.name}</div>`;
+      // 时段 + 剂量 标签
+      html += `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">`;
+      periodDoses.forEach(s=>{
+        const shortLabel = PERIOD_META[s.period]?.short || s.period;
+        html += `<span style="display:inline-flex;align-items:center;gap:6px;background:#f0f7ff;border-radius:8px;padding:6px 12px;font-size:14px">`;
+        html += `<span style="font-weight:600;color:var(--primary)">${shortLabel}</span>`;
+        html += `<span style="color:var(--text)">${s.dose}${med.unit}</span>`;
+        html += `</span>`;
       });
+      // 一天总剂量 + 剩余药量
+      html += `<span style="margin-left:auto;font-size:14px;color:var(--muted);display:flex;align-items:center;gap:10px">`;
+      html += `<span>一天总剂量 <b style="font-size:16px;color:var(--danger)">${totalDose}${med.unit}</b></span>`;
+      html += `<span style="color:var(--border)">|</span>`;
+      html += `<span>剩余 <b style="font-size:16px;color:var(--success)">${med.stock}${med.unit}</b></span>`;
+      html += `</span>`;
+      html += `</div>`;
       html += `</div>`;
     });
   }
 
   // 已停用/调整中的药品
   if(inactiveMeds.length){
-    html += `<div style="display:flex;align-items:center;gap:12px;margin:20px 0 16px;color:var(--muted);font-size:13px">`;
-    html += `<div style="flex:1;height:1px;background:var(--border)"></div>`;
-    html += `<span>📌 已停用 / 调整中</span>`;
-    html += `<div style="flex:1;height:1px;background:var(--border)"></div></div>`;
-    html += `<div class="card" style="background:#f8fafc;opacity:.65">`;
+    html += `<div style="margin:24px 0 16px">`;
+    html += `<div style="height:2px;background:linear-gradient(transparent,var(--border),transparent);border-radius:1px"></div>`;
+    html += `<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:-12px;color:var(--muted);font-size:13px">`;
+    html += `<span style="background:#fff;padding:0 10px">📌 已停用 / 调整中</span>`;
+    html += `</div></div>`;
+    html += `<div class="card" style="background:#f1f5f9;opacity:.6;filter:grayscale(.3)">`;
     inactiveMeds.forEach(med=>{
-      html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">`;
-      html += `<span style="font-size:16px;color:var(--muted)">💊</span>`;
-      html += `<span style="font-size:14px;color:var(--text)">${med.name}</span>`;
-      html += `<span style="font-size:12px;color:var(--muted);margin-left:auto">剂量：0${med.unit}/日</span>`;
+      const periodDoses = [];
+      (med.schedules||[]).forEach(s=>{ if(s.dose>0) periodDoses.push(s); });
+      html += `<div class="card" style="padding:12px 16px;margin-bottom:8px;background:#e2e8f0">`;
+      html += `<div style="font-weight:700;font-size:15px;margin-bottom:8px;color:var(--muted)">${med.name}</div>`;
+      html += `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">`;
+      if(periodDoses.length){
+        periodDoses.forEach(s=>{
+          const shortLabel = PERIOD_META[s.period]?.short || s.period;
+          html += `<span style="display:inline-flex;align-items:center;gap:6px;background:#dbeafe;border-radius:8px;padding:5px 10px;font-size:13px;opacity:.8">`;
+          html += `<span style="font-weight:600;color:var(--primary)">${shortLabel}</span>`;
+          html += `<span style="color:var(--muted)">${s.dose}${med.unit}</span>`;
+          html += `</span>`;
+        });
+      } else {
+        html += `<span style="font-size:13px;color:var(--muted)">无服药计划</span>`;
+      }
+      html += `<span style="margin-left:auto;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px">`;
+      html += `<span>一天总剂量 <b style="color:var(--muted)">0${med.unit}</b></span>`;
+      html += `<span style="color:var(--border)">|</span>`;
+      html += `<span>剩余 <b style="color:var(--muted)">${med.stock}${med.unit}</b></span>`;
+      html += `</span>`;
+      html += `</div>`;
       html += `</div>`;
     });
     html += `</div>`;
@@ -1574,7 +1594,7 @@ function renderBPList(records){
     return `<div class="bp-record-item">
       <div>
         <div class="bp-value ${cls}">${r.systolic}/${r.diastolic} <span style="font-size:16px;font-weight:600">mmHg</span>
-          ${r.pulse?`<span style="font-size:15px;font-weight:600;margin-left:8px">💓${r.pulse}</span>`:''}
+          ${r.pulse?`<span style="font-size:22px;font-weight:700;margin-left:12px;color:var(--warning)">脉率：${r.pulse}</span>`:''}
         </div>
         <div class="bp-meta">${fmt(r.measured_at)}${r.note?' · '+r.note:''}</div>
       </div>

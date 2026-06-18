@@ -5,7 +5,7 @@ services:
     build:
       context: .
       args:
-        - APP_VERSION=2.7                  # ← 每次更新代码后修改此版本号，触发重新构建
+        - APP_VERSION=2.8                  # ← 每次更新代码后修改此版本号，触发重新构建
 
     container_name: health-tracker
     ports:
