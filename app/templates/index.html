@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>🏥 健康追踪</title>
-<meta name="version" content="2.6">
+<meta name="version" content="2.7">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <style>
@@ -268,6 +268,14 @@ textarea{resize:vertical;min-height:70px}
   </div>
 </div>
 
+<!-- ═══ 服药计划页 ═══ -->
+<div class="page" id="page-schedule">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h2 style="font-size:18px;font-weight:800">📋 服药计划</h2>
+  </div>
+  <div id="scheduleList"></div>
+</div>
+
 <!-- ═══ 库存管理页 ═══ -->
 <div class="page" id="page-stock">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
@@ -437,6 +445,9 @@ textarea{resize:vertical;min-height:70px}
 <nav class="tab-bar">
   <div class="tab-item active" onclick="switchPage('meds')">
     <span class="icon">💊</span><span class="label">服药</span>
+  </div>
+  <div class="tab-item" onclick="switchPage('schedule')">
+    <span class="icon">📋</span><span class="label">计划</span>
   </div>
   <div class="tab-item" onclick="switchPage('stock')">
     <span class="icon">📦</span><span class="label">库存</span>
@@ -648,7 +659,7 @@ function switchPage(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   document.querySelectorAll('.tab-item').forEach((t,i)=>{
-    const tabs=['meds','stock','calendar','bp','bowel','backup'];
+    const tabs=['meds','schedule','stock','calendar','bp','bowel','backup'];
     t.classList.toggle('active', tabs[i]===name);
   });
   document.querySelectorAll('.nav-btn').forEach(b=>{
@@ -656,6 +667,7 @@ function switchPage(name){
     b.classList.toggle('active', b.textContent.includes(Object.values(map).find((v,i)=>Object.keys(map)[i]===name)||''));
   });
   if(name==='meds') loadTodayMeds();
+  if(name==='schedule') loadSchedule();
   if(name==='stock') loadStock();
   if(name==='calendar') loadCalendar();
   if(name==='bp') loadBP();
@@ -756,10 +768,11 @@ async function loadTodayMeds(){
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
           <div style="width:40px;height:40px;border-radius:12px;background:${meta.color};border:2px solid ${meta.border};
                       display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${meta.icon}</div>
-          <div>
+          <div style="flex:1;min-width:0">
             <div style="font-size:16px;font-weight:800">${meta.label}</div>
             <div style="font-size:12px;color:var(--muted)">${items.length}种药 · ${allTaken?'<span style="color:var(--success);font-weight:700">✅ 已全部服用</span>':anyTaken?'<span style="color:var(--warning);font-weight:700">⚠️ 部分已服</span>':'<span style="color:var(--muted)">待服药</span>'}</div>
           </div>
+          ${!allTaken ? `<button class="btn btn-success btn-sm" style="flex-shrink:0;font-size:13px;padding:6px 14px" onclick="takeAllPeriod('${period}')">⚡ 一键服药</button>` : `<span style="font-size:12px;font-weight:700;color:var(--success);background:#dcfce7;padding:5px 12px;border-radius:8px;flex-shrink:0">✅ 已服药</span>`}
         </div>
         <!-- 该时段的药品列表 -->
         <div style="display:flex;flex-direction:column;gap:10px">`;
@@ -907,6 +920,74 @@ async function deleteMedLog(id){
   } catch(e){ toast('❌ '+e.message); }
 }
 
+// ─── 一键服药（整个时段） ───
+async function takeAllPeriod(period){
+  // 重新拉取当日日志，确认最新状态
+  const date = todayStr();
+  let logs = [];
+  try{ logs = await api('GET',`/api/med-logs?date=${date}`); } catch{}
+
+  const takenMap = {};
+  logs.forEach(l=>{ takenMap[`${l.medicine_id}_${l.period}`]=(takenMap[`${l.medicine_id}_${l.period}`]||0)+l.dose; });
+
+  // 找出该时段尚未服用的药品
+  const unTaken = [];
+  medicines.forEach(med=>{
+    (med.schedules||[]).forEach(s=>{
+      if(s.period===period && !takenMap[`${med.id}_${s.period}`]){
+        unTaken.push({med, schedule:s});
+      }
+    });
+  });
+
+  if(!unTaken.length){
+    toast('✅ 本时段已全部服药！');
+    await loadTodayMeds();
+    return;
+  }
+
+  const PERIOD_LABELS = {morning:'早餐后',noon:'午餐后',evening:'晚餐后',custom:'其他'};
+  const periodLabel = PERIOD_LABELS[period]||period;
+  const drugList = unTaken.map(i=>`· ${i.med.name}  ${i.schedule.dose}${i.med.unit}`).join('\n');
+
+  // 询问自定义服药时间（默认当前时间）
+  const defaultTime = localDatetimeStr().slice(11,16);
+  const inputTime = prompt(`⏰ 请输入 ${periodLabel} 服药时间（时分）`, defaultTime);
+  if(inputTime===null) return; // 取消
+  const timeStr = inputTime.trim() || defaultTime;
+  const takenAt = `${date} ${timeStr}:00`;
+
+  if(!confirm(`📋 ${periodLabel} 一键服药\n\n${drugList}\n服药时间：${timeStr}\n\n将按计划剂量全部记录，确认吗？`)) return;
+
+  let ok=0, fail=0;
+
+  for(const {med, schedule:s} of unTaken){
+    try{
+      await api('POST','/api/med-logs',{
+        medicine_id: Number(med.id),
+        period: s.period,
+        schedule_id: s.id ? Number(s.id) : null,
+        taken_at: takenAt,
+        dose: s.dose,
+        note: ''
+      });
+      ok++;
+    } catch(e){
+      fail++;
+      console.error(`记录 ${med.name} 失败:`, e);
+    }
+  }
+
+  if(fail===0){
+    toast(`✅ ${periodLabel} ${ok} 种药全部记录成功！`);
+  } else {
+    toast(`⚠️ 成功 ${ok} 种，失败 ${fail} 种，请检查`);
+  }
+
+  await loadTodayMeds();
+  if(currentPage==='stock') await loadStock();
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // 库存管理
 // ═══════════════════════════════════════════════════════════════════════
@@ -917,27 +998,32 @@ async function loadStock(){
     container.innerHTML=`<div class="card"><div class="empty-state"><div class="empty-icon">📦</div><p>暂无药品，点击右上角添加</p></div></div>`;
     return;
   }
-  container.innerHTML = medicines.map(m=>{
-    const daysLeft = m.days_left;
+
+  // 按服药剂量的排：daily_dose>0 正常服药在前，daily_dose=0 停用/调药在底部分隔
+  const normalMeds = medicines.filter(m=>m.daily_dose>0);
+  const zeroMeds = medicines.filter(m=>!m.daily_dose||m.daily_dose<=0);
+
+  const renderMed = m=>{
+    const daysLeft = m.daily_dose>0?m.days_left:999;
     let badgeClass='stock-ok', badgeText=`剩余${daysLeft}天`;
-    if(daysLeft<=0){ badgeClass='stock-danger stock-blink'; badgeText='已耗尽！'; }
+    if(m.daily_dose<=0){ badgeClass='stock-warn'; badgeText='已停用/调整'; }
+    else if(daysLeft<=0){ badgeClass='stock-danger stock-blink'; badgeText='已耗尽！'; }
     else if(daysLeft<=3){ badgeClass='stock-warn'; badgeText=`仅剩${daysLeft}天⚠️`; }
 
     // 计算预计耗尽日期
     const emptyDateStr = (()=>{
-      if(!m.daily_dose || m.daily_dose<=0) return '';
+      if(!m.daily_dose||m.daily_dose<=0) return '';
       if(daysLeft<=0) return '';
       const d = new Date();
-      d.setDate(d.getDate() + Math.floor(daysLeft));
-      const mo = d.getMonth()+1, dy = d.getDate();
-      return `${mo}月${dy}日`;
+      d.setDate(d.getDate()+Math.floor(daysLeft));
+      return `${d.getMonth()+1}月${d.getDate()}日`;
     })();
 
     const maxDays = Math.max(30, daysLeft);
     const pct = Math.min(100, (daysLeft/maxDays)*100);
     let progClass = daysLeft<=0?'progress-danger': daysLeft<=3?'progress-warn':'progress-ok';
 
-    return `<div class="med-card">
+    return `<div class="med-card"${m.daily_dose<=0?' style="opacity:.55;filter:grayscale(.3)"':''}>
       ${m.photo?
         `<img class="med-photo" src="/static/uploads/${m.photo}" onclick="previewImg('/static/uploads/${m.photo}')" alt="">`:
         `<div class="med-photo-placeholder" onclick="uploadPhotoFor(${m.id})">📷</div>`}
@@ -959,7 +1045,106 @@ async function loadStock(){
         </div>
       </div>
     </div>`;
-  }).join('');
+  };
+
+  let html = normalMeds.map(renderMed).join('');
+  if(zeroMeds.length){
+    html += `<div style="display:flex;align-items:center;gap:12px;margin:20px 0 16px;color:var(--muted);font-size:13px">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <span>📌 已停用 / 调整中</span>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>`;
+    html += zeroMeds.map(renderMed).join('');
+  }
+  container.innerHTML = html;
+}
+
+// ─── 服药计划页 ───
+async function loadSchedule(){
+  await loadMedicines();
+  const container = document.getElementById('scheduleList');
+  if(!medicines.length){
+    container.innerHTML=`<div class="card"><div class="empty-state"><div class="empty-icon">📋</div><p>暂无药品，请先在库存页添加</p></div></div>`;
+    return;
+  }
+
+  const PERIOD_META = {
+    morning:{icon:'🌅',label:'早餐后'},
+    noon:{icon:'☀️',label:'午餐后'},
+    evening:{icon:'🌆',label:'晚餐后'},
+    custom:{icon:'⏰',label:'其他时段'},
+  };
+  const PERIOD_ORDER = ['morning','noon','evening','custom'];
+
+  // 按 daily_dose 分组
+  const activeMeds = medicines.filter(m=>m.daily_dose>0);
+  const inactiveMeds = medicines.filter(m=>!m.daily_dose||m.daily_dose<=0);
+
+  let html = '';
+
+  // 正常服药计划
+  if(activeMeds.length){
+    html += `<div style="margin-bottom:14px"><span style="font-size:15px;font-weight:700">💊 当前服药方案</span></div>`;
+
+    // 按时段分组渲染
+    PERIOD_ORDER.forEach(period=>{
+      const meta = PERIOD_META[period];
+      // 收集该时段有服药计划的药品
+      const items = [];
+      activeMeds.forEach(med=>{
+        (med.schedules||[]).forEach(s=>{
+          if(s.period===period) items.push({med, schedule:s});
+        });
+      });
+      if(!items.length) return;
+
+      html += `<div class="card" style="padding:14px 16px;margin-bottom:12px">`;
+      html += `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">`;
+      html += `<span style="font-size:22px">${meta.icon}</span>`;
+      html += `<span style="font-size:16px;font-weight:700">${meta.label}</span>`;
+      html += `<span style="font-size:12px;color:var(--muted);margin-left:auto">${items.length} 种药</span>`;
+      html += `</div>`;
+
+      items.forEach(({med, schedule:s})=>{
+        html += `<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#f8fafc;border-radius:10px;margin-bottom:8px">`;
+        html += `<span style="font-size:18px">💊</span>`;
+        html += `<div style="flex:1;min-width:0">`;
+        html += `<div style="font-weight:600;font-size:15px">${med.name}</div>`;
+        html += `<div style="font-size:12px;color:var(--muted);margin-top:2px">库存：${med.stock}${med.unit} · 日用 ${med.daily_dose}${med.unit}</div>`;
+        html += `</div>`;
+        html += `<div style="text-align:right;flex-shrink:0">`;
+        html += `<div style="font-size:18px;font-weight:700;color:var(--primary)">${s.dose}</div>`;
+        html += `<div style="font-size:11px;color:var(--muted)">${med.unit}</div>`;
+        html += `</div>`;
+        html += `</div>`;
+      });
+      html += `</div>`;
+    });
+  }
+
+  // 已停用/调整中的药品
+  if(inactiveMeds.length){
+    html += `<div style="display:flex;align-items:center;gap:12px;margin:20px 0 16px;color:var(--muted);font-size:13px">`;
+    html += `<div style="flex:1;height:1px;background:var(--border)"></div>`;
+    html += `<span>📌 已停用 / 调整中</span>`;
+    html += `<div style="flex:1;height:1px;background:var(--border)"></div></div>`;
+    html += `<div class="card" style="background:#f8fafc;opacity:.65">`;
+    inactiveMeds.forEach(med=>{
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">`;
+      html += `<span style="font-size:16px;color:var(--muted)">💊</span>`;
+      html += `<span style="font-size:14px;color:var(--text)">${med.name}</span>`;
+      html += `<span style="font-size:12px;color:var(--muted);margin-left:auto">剂量：0${med.unit}/日</span>`;
+      html += `</div>`;
+    });
+    html += `</div>`;
+  }
+
+  // 无任何药品时
+  if(!activeMeds.length && !inactiveMeds.length){
+    html = `<div class="card"><div class="empty-state"><div class="empty-icon">📋</div><p>暂无药品，请先在库存页添加</p></div></div>`;
+  }
+
+  container.innerHTML = html;
 }
 
 // 添加药品 Modal

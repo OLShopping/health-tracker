@@ -18,6 +18,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# -------- 版本号参数：改变此值可使后续构建缓存失效 ----------
+ARG APP_VERSION=unknown
+RUN echo "Building version: $APP_VERSION"
+
 # -------- 复制本地代码（NAS 上 git pull 后即可用最新代码） ----------
 COPY . /app/
 
